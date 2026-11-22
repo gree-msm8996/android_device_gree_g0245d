@@ -18,6 +18,13 @@ on post-fs
     mount none /mnt/vendor/persist /persist bind
 
 on post-fs-data
+    # VoLTE: libril-qc-qmi-1's mbn_sw feature scans the hardcoded directory
+    # /data/vendor/radio/modem_config/mcfg_sw, but init.qcom.sh copies the
+    # firmware mcfg tree to /data/vendor/modem_config (no /radio/).  Bridge
+    # the gap here, before late_start runs qcom-sh and rild starts; see
+    # init.qcom.sh for the patched-mcfg installation.
+    mkdir /data/vendor/radio 0770 radio radio
+    symlink /data/vendor/modem_config /data/vendor/radio/modem_config
     mkdir /data/misc/camera 0770 cameraserver camera
     # A daemon killed during a previous camera session can leave cam_socket*
     # behind.  mm-qcamera-daemon then starts without binding a fresh socket

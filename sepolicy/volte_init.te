@@ -1,0 +1,5 @@
+# VoLTE (G0245D): init.g0245d.rc creates /data/vendor/radio/modem_config as a
+# symlink to /data/vendor/modem_config so that libril-qc-qmi-1's mbn_sw
+# feature finds the mcfg tree it scans by its hardcoded path.
+allow init vendor_radio_data_file:dir { write add_name };
+allow init vendor_radio_data_file:lnk_file create;
