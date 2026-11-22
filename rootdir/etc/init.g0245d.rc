@@ -19,6 +19,18 @@ on post-fs
 
 on post-fs-data
     mkdir /data/misc/camera 0770 cameraserver camera
+    # A daemon killed during a previous camera session can leave cam_socket*
+    # behind.  mm-qcamera-daemon then starts without binding a fresh socket
+    # and CameraService enumerates 0 devices.  Clean the stale nodes before
+    # class main starts the daemon.
+    rm /data/misc/camera/cam_socket0
+    rm /data/misc/camera/cam_socket1
+    rm /data/misc/camera/cam_socket2
+    rm /data/misc/camera/cam_socket3
+    rm /data/misc/camera/cam_socket4
+    rm /data/misc/camera/cam_socket5
+    rm /data/misc/camera/cam_socket6
+    rm /data/misc/camera/cam_socket7
     chmod 0775 /persist/sensors
     chmod 0664 /persist/sensors/sensors_settings
     chown system root /persist/sensors/sensors_settings
