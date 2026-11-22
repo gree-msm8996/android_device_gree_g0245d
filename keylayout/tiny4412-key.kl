@@ -1,0 +1,8 @@
+# Stock input name of the Goodix GF816M touch keys (gf816m_keys driver).
+# The fingerprint sensor reads the two capacitive pads beside Home.
+# 139 is APP_SWITCH (recents) on Android 11, not MENU.
+# WAKE: the capacitive HOME pad is the fingerprint sensor; a tap while the
+# screen is off must wake the device (task 3).  BACK/RECENTS stay non-waking.
+key 102   HOME WAKE
+key 139   APP_SWITCH VIRTUAL
+key 158   BACK VIRTUAL

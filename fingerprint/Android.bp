@@ -1,0 +1,26 @@
+// binder_bridge: DT_NEEDED constructor for the fingerprint vendor HAL blob.
+//
+// The LineageOS fingerprint HIDL service (built from source) only calls
+// configureRpcThreadpool(), which opens /dev/hwbinder but not /dev/binder.
+// The Goodix gx_fpd daemon registers its "goodix.fp" binder service on
+// /dev/binder, so libfp_client.so's Fp::connect() cannot find it and the
+// daemon ends up with zero clients -> enroll progress never reaches the
+// framework/UI.
+//
+// This library is linked into fingerprint.qcom.so as a DT_NEEDED dependency:
+// Bionic ignores LD_PRELOAD for the init-transitions HAL (AT_SECURE=1), but
+// DT_NEEDED still loads the constructor and opens /dev/binder in the HAL
+// process so Fp::connect() succeeds. Built from source at build time
+// (not shipped as a prebuilt blob).
+cc_library_shared {
+    name: "binder_bridge",
+    vendor: true,
+    srcs: ["binder_bridge.cpp"],
+    shared_libs: [
+        "libbinder",
+        "libutils",
+        "libc++",
+        "liblog",
+    ],
+    cflags: ["-fvisibility=default"],
+}
