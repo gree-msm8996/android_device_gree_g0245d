@@ -1,0 +1,21 @@
+// Copyright (C) 2026 The LineageOS Project
+// SPDX-License-Identifier: Apache-2.0
+
+cc_binary {
+    name: "android.hardware.ir@1.0-service.g0245d",
+    defaults: ["hidl_defaults"],
+    vendor: true,
+    relative_install_path: "hw",
+    srcs: [
+        "ConsumerIr.cpp",
+        "service.cpp",
+    ],
+    shared_libs: [
+        "android.hardware.ir@1.0",
+        "libbase",
+        "libhidlbase",
+        "libutils",
+    ],
+    init_rc: ["android.hardware.ir@1.0-service.g0245d.rc"],
+    vintf_fragments: ["android.hardware.ir@1.0-service.g0245d.xml"],
+}
