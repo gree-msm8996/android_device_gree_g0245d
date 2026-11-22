@@ -1,0 +1,51 @@
+# G0245D SELinux policy for the Goodix GF816M fingerprint stack.
+#
+# gx_fpd is relabeled to hal_fingerprint_default_exec (see file_contexts) so
+# init transitions it into the hal_fingerprint_default domain.  The stock
+# fingerprint HIDL service already runs in that domain, so the two processes
+# become same-domain and the hal_fingerprint_default <-> gx_fpd binder
+# call/transfer denials disappear without any broad init:binder allowances.
+
+# Fingerprint char device: the HAL domain opens /dev/goodix_fp and issues the
+# stock ioctl ABI (nr 0..9, including the 0x4008xxxx encoded ones).
+allow hal_fingerprint_default goodix_fp_device:chr_file {
+    open read write ioctl getattr
+};
+# Allow the ioctl commands the Goodix blobs use (0x6700..0x6709). Without an
+# xperm rule, ioctl is still denied under enforcing even with the perms above.
+allowxperm hal_fingerprint_default goodix_fp_device:chr_file ioctl {
+    0x6700 0x6701 0x6702 0x6703 0x6704 0x6705 0x6706 0x6707 0x6708 0x6709
+};
+
+# gx_fpd (now hal_fingerprint_default) needs its fingerprint data under
+# /data/system/users/0/fpdata and the legacy /data/fpc path.
+allow hal_fingerprint_default fingerprintd_data_file:dir create_dir_perms;
+allow hal_fingerprint_default fingerprintd_data_file:file create_file_perms;
+allow hal_fingerprint_default fpc_data_file:dir create_dir_perms;
+allow hal_fingerprint_default fpc_data_file:file create_file_perms;
+allow hal_fingerprint_default fpc_data_file:sock_file { create unlink };
+
+# binder communication with system_server / Keyguard (HAL publishes the
+# fingerprint HIDL service and receives scheduler hints).
+binder_call(hal_fingerprint_default, system_server)
+allow hal_fingerprint_default power_service:service_manager find;
+allow hal_fingerprint_default sysfs:file { getattr open read };
+
+# gx_fpd registers the legacy "goodix.fp" binder service on /dev/binder;
+# the HIDL HAL (same domain) looks it up through binder_bridge.  Without a
+# service_contexts entry it lands in default_android_service and enforcing
+# blocks both add and find.
+allow hal_fingerprint_default hal_fingerprint_service:service_manager {
+    add find
+};
+allow hal_fingerprint_default hal_fingerprint_default:binder { call transfer };
+
+# The init rc chowns /dev/goodix_fp at boot; keep init able to relabel the
+# freshly created node before the HAL opens it.  No ioctl is needed by init.
+allow init goodix_fp_device:chr_file { setattr getattr };
+
+# netlink socket used by the Goodix daemon at init.
+allow hal_fingerprint_default self:netlink_socket create;
+
+# The camera HAL (not just mm-qcamerad) also opens /data/misc/camera.
+allow hal_camera_default camera_data_file:dir { search write add_name remove_name };

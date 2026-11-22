@@ -1,0 +1,2 @@
+# The G0245D IR HAL writes Raon transmit frames to /dev/remote_ctrl_dev.
+allow hal_ir_default remote_ctrl_device:chr_file rw_file_perms;

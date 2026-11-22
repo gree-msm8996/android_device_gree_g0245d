@@ -1,0 +1,6 @@
+# G0245D fingerprint char device type (Goodix GF816M /dev/goodix_fp).
+type goodix_fp_device, dev_type;
+
+# Raon remote-control blaster char device (/dev/remote_ctrl_dev).
+# A dedicated type keeps the IR HAL write grant separate from generic devices.
+type remote_ctrl_device, dev_type;

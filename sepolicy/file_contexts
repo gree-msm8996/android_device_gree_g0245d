@@ -1,0 +1,31 @@
+# G0245D device node labels for enforcing mode.
+# fsck is neverallow-blocked from generic block_device access; the cache
+# partition gets the dedicated public type instead (fsck.te grants rw on it).
+
+/dev/block/sda3                         u:object_r:cache_block_device:s0
+/dev/block/bootdevice/by-name/cache     u:object_r:cache_block_device:s0
+
+# The QCA6174 BT power switch. The AOSP genfscon for /class/rfkill/rfkill0/state
+# matches the class symlink path, never the real node under /sys/devices/, so
+# without this entry the file stays generic sysfs: init cannot setattr it and
+# hal_bluetooth cannot write it (bt power on). init.g0245d.rc restorecons it.
+/sys/devices/vendor/vendor:bt_qca6174/rfkill/rfkill0/state u:object_r:sysfs_bluetooth_writable:s0
+
+# Goodix GF816M fingerprint daemon.  Label its executable with the standard
+# HAL fingerprint exec type so init transitions it into the
+# hal_fingerprint_default domain (has init_daemon_domain) instead of leaving
+# it in init:s0.  This clears the init -> char_device ioctl neverallow and
+# the hal_fingerprint_default <-> gx_fpd binder denials at once (same domain).
+/(vendor|system/vendor)/bin/gx_fpd                 u:object_r:hal_fingerprint_default_exec:s0
+# Dedicated label for the fingerprint char device so the HAL domain can be
+# granted ioctl without touching generic device:chr_file.
+/dev/goodix_fp                                      u:object_r:goodix_fp_device:s0
+
+# gx_fpd legacy fingerprint data.  Label it with the standard HAL fingerprint
+# data type so the domain can create/read templates without widening the
+# generic system_data_file (which is neverallow-protected).
+/data/system/fingerprint(/.*)?                      u:object_r:fingerprintd_data_file:s0
+
+# G0245D Consumer IR HAL and the Raon blaster node it drives.
+/(vendor|system/vendor)/bin/hw/android\.hardware\.ir@1\.0-service\.g0245d u:object_r:hal_ir_default_exec:s0
+/dev/remote_ctrl_dev                                u:object_r:remote_ctrl_device:s0

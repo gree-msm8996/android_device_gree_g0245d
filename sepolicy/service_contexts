@@ -1,0 +1,5 @@
+# Goodix GF816M legacy binder service registered by /vendor/bin/gx_fpd.
+# The stock fingerprint HAL in hal_fingerprint_default looks this up with
+# service_manager find(); label it as the standard fingerprint HAL service
+# so enforcing mode permits add/find (see fingerprint.te).
+goodix.fp                               u:object_r:hal_fingerprint_service:s0
