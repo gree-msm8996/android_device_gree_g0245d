@@ -1,0 +1,660 @@
+# G0245D device-specific proprietary files.
+#
+# Provenance convention (per port rules): every blob not extracted from the
+# G0245D stock package is pinned with its sha1 and annotated with its source.
+#
+# Sources:
+#   [stock-6.0.1] = Stock/G0245D_HALO_1.2.4_K2_Stable.zip, Android 6.0.1
+#                   system.img (flat /vendor layout). This is the ONLY blob
+#                   source used below.
+#   wifi config  = device/gree/msm8996-common/wifi (byte-identical to the xiaomi
+#                   msm8996-common wifi config); installed by msm8996.mk, so no
+#                   wifi entry is left in this list.
+#
+# 2026-11-22 (session 32) retired the old [g0215d-tree] provenance block:
+#   * ACDB / tfa98xx / a530 zap / libfpalgorithm / WCNSS_cfg.dat turned out to be
+#     byte-identical to stock -> re-pinned to [stock-6.0.1] (no content change).
+#   * tfa98xx.cnt was a different G0215D build -> replaced with the G0245D stock
+#     preset (4146B, stock speaker tuning).
+#   * gx_fpd / libfp_client / libfpservice had to stay: swapping them for the stock
+#     pair crashes the HAL (ABI lock, see the Fingerprint block below).
+#   * wcnss firmware (qwlan30/otp30/bdwlan30/utf30/data.msc) dropped: the
+#     handset's own /firmware partition (firmware_mnt) already provides them and
+#     the driver loads them from there (verified: driver + FW 4.1.2.4878 up).
+#   * wlan_mac.bin / bdaddr placeholders dropped: stock symlinks them to /persist,
+#     and the shipped 02:00:00:00:00:00 copies were masking the real MAC (the
+#     driver now reports f4:91:1e:36:26:d2 from /persist).
+#
+# Platform-common blobs (RIL, display, GPU, media, sensors, GPS, wifi, ...) come
+# from the xiaomi msm8996-common blob set via device/gree/msm8996-common.
+
+# Fingerprint - Goodix GF816M
+#
+# ABI-LOCKED to the G0215D blob set. Tried the stock G0245D 6.0.1
+# gx_fpd/libfp_client/libfpservice (+stock libunwind) on 2026-11-22 and the HAL
+# aborts at boot:
+#   __stack_chk_fail in android::BpFpService::connect()
+#   <- android::Fp::connect() <- goodix_sensor_init() <- setActiveGroup()
+#   (8 HAL deaths, dumpsys fingerprint prints[].count=0)
+# The legacy HAL blob we ship is vendor/lib64/hw/fingerprint.qcom.so, which is
+# the G0215D build (md5 55c20cec... == /system/vendor/lib64/hw/fingerprint.qcom.so
+# in the g0215d image) plus our cancel/enumerate/binder_bridge patches; stock 6.0.1
+# has no fingerprint.qcom.so at all, only fingerprint.default.so. That HAL passes a
+# client type the stock 6.0.1 libfp_client does not know -> stack corruption.
+# Partial swaps are therefore impossible: the four runtime blobs + HAL must come
+# from the same build. De-g0215d-ing the fingerprint stack means re-deriving the
+# whole patch chain from stock's fingerprint.default.so - a separate job.
+# NOTE: gx_fpd's dynstr has libbacktrace.so / libunwind.so overwritten with
+# libc.so in the G0215D image itself (this platform has no libunwind.so in
+# /system/lib64); that patch is pre-existing, not ours. See fingerprint/BLOBS.md.
+vendor/bin/gx_fpd|fc99a7caf09464a0a4a59fc2f0e66b2cebc4bfd8
+vendor/lib64/libfpalgorithm.so|6aaa002bd1046fa3424bb99b3c8bd506ad99e3cb
+vendor/lib64/libfp_client.so|ffd0ec58530fc2d8268233fa99aeccfc3bd9c138
+vendor/lib64/libfpservice.so|bf1fcf2de0d6863361d4b5a5e840636247ed1a4e
+
+# GPS: the source-built QTI stack (device/gree/msm8996-common/gps) provides
+# everything. The Android 6 gps.default.so/libloc_eng blobs from the old
+# verified image are ABI-incompatible with the new libloc_core (no
+# LocAdapterBase::reportNmea export) and are intentionally NOT used.
+
+# Audio - device-tuned ACDB calibration blocks [stock-6.0.1]
+system/etc/acdbdata/MTP/MTP_Bluetooth_cal.acdb|8ecc3dc72142a42a70f80bd3488052646aeb7e4c
+system/etc/acdbdata/MTP/MTP_General_cal.acdb|6f4bcf27e045df72583b126fd91fe5749de721a5
+system/etc/acdbdata/MTP/MTP_Global_cal.acdb|2be26b6499bd2cfb8dcb08757de993d34ba8dc97
+system/etc/acdbdata/MTP/MTP_Handset_cal.acdb|7f91fc57c8f6c74c33e0965f0d1dacb4bc1b558c
+system/etc/acdbdata/MTP/MTP_Hdmi_cal.acdb|677cd6ce049ba99dfc8e2d2766a7f82089ef373d
+system/etc/acdbdata/MTP/MTP_Headset_cal.acdb|6987a83be40b6a0bb11b9810c4ff050525d78398
+system/etc/acdbdata/MTP/MTP_Speaker_cal.acdb|9bfc75f8b7262c32d7cde882d8e3ee02195aa306
+
+# Audio - TFA9890 smart amp container [stock-6.0.1]
+system/etc/firmware/tfa98xx.cnt|3545ffc3c2192a007e9afb1795ba93bf57fddc49
+
+# Graphics - a530 zap shader (absent from the xiaomi blob set) [stock-6.0.1]
+system/etc/firmware/a530_zap.b00|8fbe425d7edcc44808e010495b1256de9dc97623
+system/etc/firmware/a530_zap.b01|5fd52bcfe4eb47d1b68ffe7c474263bb801681ee
+system/etc/firmware/a530_zap.b02|657ce04bbb8cc88ccead7c22ed1e3ca1776c7518
+system/etc/firmware/a530_zap.elf|279c19d423c1b2d0ae7b591a4624bfc519d511e5
+system/etc/firmware/a530_zap.mdt|b40fd4fb822fbc3d3959eb47df8a6da205d6ac65
+
+# WiFi/BT: nothing is shipped from this device tree any more (session 32).
+#   * WCNSS_qcom_cfg.ini / p2p+wpa overlays  -> device/gree/msm8996-common/wifi
+#   * WCNSS_cfg.dat                          -> device/gree/msm8996-common/wifi
+#   * qwlan30/otp30/bdwlan30/utf30/data.msc  -> live in /firmware (firmware_mnt)
+#   * wlan_mac.bin / bdaddr                  -> /persist, per stock layout
+# Note: the stock 6.0.1 WCNSS_qcom_cfg.ini must NOT be used - it is matched to
+# the stock 6.0 qcacld and makes nl80211 scan stick on this driver
+# (qcacld 4.0.11.213X / FW 4.1.2.4878), verified 2026-11-22.
+
+# Touch / IR remote firmware
+# No stock counterpart exists in the G0245D package (system.img has neither file)
+# and neither kernel nor userspace references these names, but they are the only
+# remaining non-stock entries; kept until the touch/IR FW path is re-checked.
+# Source: G0215D system image.
+system/etc/firmware/A4_2F_4.0_05.fw|06636c66ffccc4ce98bf70f475f920b5ca40ab67
+system/etc/firmware/Gree2_4005_V2.06_20170223.raw|f02c9be83bd5397b48266e0a045997269daef136
+
+# ======================================================================
+# Camera - G0245D sensor modules (IMX258 rear + OV8856_CMB199 front)
+# [stock-6.0.1] = extracted from Stock/G0245D_HALO_1.2.4_K2_Stable.zip
+#   system.img /vendor/lib (Android 6 flat layout). Only entries whose
+#   names are NOT already provided by msm8996-common (xiaomi set) are
+#   listed here to avoid Soong duplicate-module conflicts.
+# ======================================================================
+
+# HAL module enumeration config - the G0245D variant installed under the
+# generic name libmmcamera2_sensor_modules.so looks up.
+# NOTE: this sha1 is the stock GREE XML (5814B), installed under BOTH the
+# generic name (legacy lookup path) and the GREE-specific name below; the
+# stock blob-era daemon's sensor_init_xml_probe prefers the specific name.
+system/etc/camera/msm8996_camera.xml|06973f9b5e3b7380ba9428bdd112e17a0e42744c
+system/etc/camera/msm8996_camera_G0245D.xml|06973f9b5e3b7380ba9428bdd112e17a0e42744c
+
+system/etc/camera/imx214_chromatix.xml|c27c3a806a18dfa693c186dbf5fdf48f715acacb
+system/etc/camera/imx230_chromatix.xml|e880749355c3fee13734936095d428fd1ee82a0f
+system/etc/camera/imx258_chromatix.xml|be1c97a018cde34cf81f6efd04a15735c811ba15
+system/etc/camera/imx258_ofilm_chromatix.xml|300b052cf7e2f950d4e7e5b3c33f08811648ebcc
+system/etc/camera/imx298_chromatix.xml|f86b59c6ab3f1591ceb5295d00f69d5518d9b197
+system/etc/camera/ov13850_chromatix.xml|c38b8e0831ae3a10180823e7fea21f49120fae11
+system/etc/camera/ov13850_q13v06k_chromatix.xml|7c2c002e97ec2bc1d6824f23e4aba9050cf0783c
+system/etc/camera/ov4688_chromatix.xml|e664aa259098929958c6570b030e4129731b54d5
+system/etc/camera/ov5670_chromatix.xml|9f8ef73163204694d0ec51d979403e77d7fde814
+system/etc/camera/ov8856_chromatix.xml|3aac8ba84031148eee6830bccef5fff5bdf107ae
+system/etc/camera/ov8856_cmb199_chromatix.xml|1e3e04103acb19df7f8e60ce004ed2d141d7f9b8
+system/etc/camera/ov8858_chromatix.xml|583c5b03ef22e41ea91bcf72e4ba7148a00d74d1
+system/etc/camera/ov8858_d8v03c_chromatix.xml|cf93cf1a4a37648b7296278dbed28eb1ad2db558
+system/etc/camera/ov8865_chromatix.xml|46d95a42640a6ed3d267642a30762effbb68bf8d
+system/etc/camera/s5k3m2xm_chromatix.xml|d05c68090c523fa3a538633ec8d05656e539c729
+system/etc/camera/s5k3m2xx_chromatix.xml|f96810c59d1ffb3484d297a06555c2fb09d42045
+system/etc/camera/s5k3p3_chromatix.xml|bbd942ee4c854d64efaf73a276644ced7fbedee7
+
+vendor/lib/libactuator_ad5816g.so|48ed74cf7173ec2e916004090268d37f133e943a
+vendor/lib/libactuator_ad5823.so|d005362e3772f96ca348ac83432e9238014df365
+vendor/lib/libactuator_bu64244gwz.so|e7dbe38d964f7490dff3b7058bcaf4979f185f22
+vendor/lib/libactuator_bu64297.so|d25eb3a4047050ca3186f34f2b356b1b63f8031d
+vendor/lib/libactuator_dw9714.so|bb985043f0c051c1740706f39ef54207f851e8f1
+vendor/lib/libactuator_dw9716.so|1ddc4c650cc5bce30ea2c948ea82c2b1df2294ca
+vendor/lib/libactuator_dw9761b.so|dbc462126e462143aa90ac08bf4e940a83014499
+vendor/lib/libactuator_dw9800.so|dcf52a768aa2eec20b4230b621a66dc728aa026b
+vendor/lib/libactuator_dw9800w_imx258_ofilm.so|f3fb0063eff761cbeff772f01f0ba7d2d1917704
+vendor/lib/libactuator_dw9800w_imx258.so|225f4d2592b5866ce1dceb9fe8aa5363aa655b2d
+vendor/lib/libactuator_lc898122.so|3c8944cc378e2478747b05fb999a08d80384e4e7
+vendor/lib/libactuator_lc898212xd.so|fc4b76305c6c775413e129881ef328c402ef8151
+vendor/lib/libactuator_rohm_bu64243gwz.so|91349f7fafe3568185919d47d5a3e34721b7a018
+vendor/lib/libchromatix_csidtg_common.so|5ef6e06284b2e68e9455db8c4a48cae290b79035
+vendor/lib/libchromatix_csidtg_cpp_preview.so|45a9fd44167b106ef9722e6b1b31892483ccfdaf
+vendor/lib/libchromatix_csidtg_postproc.so|e41ee1b97640a8c282058a62578d4e2d620ce80d
+vendor/lib/libchromatix_csidtg_preview.so|fb46735793ade2ceb5eb623248b44c7745f5a258
+vendor/lib/libchromatix_csidtg_zsl_preview.so|33051df23553924eb6f8ada6aa8c1ef1e51543cb
+vendor/lib/libchromatix_imx214_4k_preview_lc898122.so|42dbf0bade08ec00bafe8255f10807d82b083c31
+vendor/lib/libchromatix_imx214_4k_video_lc898122.so|fec1879ce3fcba4b4d504abd914becd55e80b818
+vendor/lib/libchromatix_imx214_common.so|77d8602b3f823ca65446bdb22cb05d7c4b546f14
+vendor/lib/libchromatix_imx214_cpp_hfr_120.so|798e64375d394c8196cb3681203c5dabb4a6c51c
+vendor/lib/libchromatix_imx214_cpp_hfr_60.so|3d2967ee0c01644a144619b1bba63c5d1d6b1d48
+vendor/lib/libchromatix_imx214_cpp_hfr_90.so|57ec0ce534b1c946e983bae8119974227b36ceaf
+vendor/lib/libchromatix_imx214_cpp_liveshot.so|1976edcff0c66b30a42cea83cbf4c553f1606e9a
+vendor/lib/libchromatix_imx214_cpp_preview.so|d7ea83fbe36764179f858b1c294703489346a2f3
+vendor/lib/libchromatix_imx214_cpp_snapshot_hdr.so|ba72cc57734277b7d64d9981b2ac88eaab9493d1
+vendor/lib/libchromatix_imx214_cpp_snapshot.so|9c78ccf1854658ffb0294da69ac6c2fb86193012
+vendor/lib/libchromatix_imx214_cpp_video_hdr.so|33716149d711004f79b47dc35c5a34861e06e815
+vendor/lib/libchromatix_imx214_cpp_video.so|6b34fad7477be3280ee0c9e9e64cd6ba9efeb6c4
+vendor/lib/libchromatix_imx214_default_preview_lc898122.so|2a3b8888d5b376a9b7b5655d09ef45a949fa69a0
+vendor/lib/libchromatix_imx214_default_video_lc898122.so|50f6e0a5807b486b7ea990a645ff9a4c1f4b468c
+vendor/lib/libchromatix_imx214_default_video.so|2a7a7a289713e31564f59d027b14e4d1486023fd
+vendor/lib/libchromatix_imx214_hdr_snapshot_lc898122.so|027810d9c4f1ff6309f4821ddfce8c875ec235c4
+vendor/lib/libchromatix_imx214_hdr_video_lc898122.so|60adfc72f1cd92926ee6f5a6fe7c9492aeffa63f
+vendor/lib/libchromatix_imx214_hfr_120_lc898122.so|4f1ef5b1a72506f58bd7e20204c81b842a52d149
+vendor/lib/libchromatix_imx214_hfr_120.so|6fa427837496c036128d5c324a8d4cf7fda24141
+vendor/lib/libchromatix_imx214_hfr_60_lc898122.so|72c17da1bf9d27cefb521d2c075ac9b58be9bdc0
+vendor/lib/libchromatix_imx214_hfr_60.so|f8890d526782168feab48c08c0184e2e23681037
+vendor/lib/libchromatix_imx214_hfr_90_lc898122.so|ccc3afa9337917f87b819783ce10be8a5a35688e
+vendor/lib/libchromatix_imx214_hfr_90.so|3b9e0191567d5c791944368966b2a668e8c41c31
+vendor/lib/libchromatix_imx214_liveshot.so|a1392dcb39fd7a614b4d35025eccaecd5cf050a5
+vendor/lib/libchromatix_imx214_postproc.so|f7f663e24f8c20134e4692e68c4bdb29bf913ac2
+vendor/lib/libchromatix_imx214_preview.so|0c167600f1c673de7808f819907aec59056a1514
+vendor/lib/libchromatix_imx214_snapshot_hdr.so|41fb58ca94803322726961f0d1ab4ba855d383a0
+vendor/lib/libchromatix_imx214_snapshot.so|4ec037ae0352df672fde8cb1217c9694d852526e
+vendor/lib/libchromatix_imx214_video_hdr.so|7d7b004c9362a8930f3998b01c4ab3ca2279832c
+vendor/lib/libchromatix_imx214_zsl_preview_lc898122.so|0d4410260c1090185a62f77bbea7dda7b85f62a2
+vendor/lib/libchromatix_imx214_zsl_video_lc898122.so|380afb7614a1d4ec10501a8f9c220d8bec6144a2
+vendor/lib/libchromatix_imx230_1080p_preview_lc898212xd.so|1a40777b68f7950a4bb7a5894c1aa353fb91c975
+vendor/lib/libchromatix_imx230_1080p_video_lc898212xd.so|2a779837f85b60a589e094711fd9c6f2de84e9e6
+vendor/lib/libchromatix_imx230_4k_preview_lc898212xd.so|835e076c330afcf249d8360137e15d64c6eb5e57
+vendor/lib/libchromatix_imx230_4k_video_lc898212xd.so|45f1434c12099ac64915a099948e12ffb04179f1
+vendor/lib/libchromatix_imx230_common.so|47107bc215d71b3250630d54c3e3fb0862ab99bb
+vendor/lib/libchromatix_imx230_cpp_hfr_120.so|02b897ee7d788316c7f1495b119587e348229f57
+vendor/lib/libchromatix_imx230_cpp_hfr_240.so|214dacb936f676d3570bf2c763d2c9de13b87810
+vendor/lib/libchromatix_imx230_cpp_hfr_60.so|edf0ca457eeac48a022b4069cda9c64f9eefe67a
+vendor/lib/libchromatix_imx230_cpp_hfr_90.so|1ebc298fa07b9650b94e9d450146e6f49346a3c9
+vendor/lib/libchromatix_imx230_cpp_liveshot.so|e187dd51ebfa25e11e450194e0a5d38850942b80
+vendor/lib/libchromatix_imx230_cpp_preview.so|530452244bf34d697741e463de6a40ac43fcc6a1
+vendor/lib/libchromatix_imx230_cpp_raw_hdr.so|7d6a653ae7afe9d2c07090abf5a9bebcacecaec5
+vendor/lib/libchromatix_imx230_cpp_snapshot_hdr.so|050c2de38af33d2796ffc9c7dc2eefdc8de95b3d
+vendor/lib/libchromatix_imx230_cpp_snapshot.so|d525cfbd9c2829d39c1d2058211a4a30230d233f
+vendor/lib/libchromatix_imx230_cpp_video_4k.so|0b6af011a16b87761b1d916124d6e6e1c83150fe
+vendor/lib/libchromatix_imx230_cpp_video_hdr.so|33f74221c9d9731b3c8d10f399698ea0c6af71e5
+vendor/lib/libchromatix_imx230_cpp_video.so|531cbd274d15724be5fb1428e88af3b32321229f
+vendor/lib/libchromatix_imx230_default_preview_lc898212xd.so|81b5fdfe6a559af49d1ba94fe0d1f5c3ced4c3f0
+vendor/lib/libchromatix_imx230_default_video_lc898212xd.so|57e5c045a464f45c1e41ff3e57554a201f2fe897
+vendor/lib/libchromatix_imx230_default_video.so|324e2df594c5df59f708b7ccf4640fa2d0ca274c
+vendor/lib/libchromatix_imx230_hdr_snapshot_lc898212xd.so|679cf73a8f0920e75cc2cb8f41fe70ff753853ef
+vendor/lib/libchromatix_imx230_hdr_video_lc898212xd.so|aad9e2fd9243d79c3dcfc2e7acc8618f3ac7d5b9
+vendor/lib/libchromatix_imx230_hfr_120_lc898212xd.so|d26451bbc2f96f846df23aaa7274830151cec6ca
+vendor/lib/libchromatix_imx230_hfr_120.so|f4a3fe8792030760e4850b4b2726c155eb001c5a
+vendor/lib/libchromatix_imx230_hfr_240_lc898212xd.so|45279eb7a227eac70cb081213f88e436669d4496
+vendor/lib/libchromatix_imx230_hfr_240.so|df4e0d11f7a782eccfa7e34241e402407d9cae0b
+vendor/lib/libchromatix_imx230_hfr_60_lc898212xd.so|033a9e698c65c237d0522c9451c3b8b5d3961cd0
+vendor/lib/libchromatix_imx230_hfr_60.so|e09fed52ba36047f930f32cc6070f40b3c45eb86
+vendor/lib/libchromatix_imx230_hfr_90_lc898212xd.so|c3316865b9460ab3ef7a9a26f929c67106b2ac77
+vendor/lib/libchromatix_imx230_hfr_90.so|50c838aae0e5ced6d5d149e81d5e4a5279cdde7c
+vendor/lib/libchromatix_imx230_liveshot.so|923fb1e6b45b8e031baddfdcc03a49336910bb93
+vendor/lib/libchromatix_imx230_postproc.so|cee7f5ccd79baedb1fdc06c8370c0fbc5fe36be8
+vendor/lib/libchromatix_imx230_preview.so|5321ccc0fd6f66b5b01bbe2fb2fc8de276996cdb
+vendor/lib/libchromatix_imx230_raw_hdr_lc898212xd.so|922a441c0f201267464e00aead0062325278c35e
+vendor/lib/libchromatix_imx230_raw_hdr.so|3f77c8789f8915b0c8fd3ff272473c90eef745f4
+vendor/lib/libchromatix_imx230_snapshot_hdr.so|02a23483f3cca171c6b02dfa5c679203807dbebd
+vendor/lib/libchromatix_imx230_snapshot.so|c7444f292245e0afdfc941e344ff14a80e74c16a
+vendor/lib/libchromatix_imx230_video_16M_lc898212xd.so|d6a0eaed49d2008afbc1b759d645d235a467454e
+vendor/lib/libchromatix_imx230_video_4k.so|197ff80c1f2bd63750b89e77ce3d7f5a0d1b6f3f
+vendor/lib/libchromatix_imx230_video_hdr.so|511079ab2c396ca12323ec1970150b45e4f7ac6d
+vendor/lib/libchromatix_imx230_zsl_preview_lc898212xd.so|9f8ad0208babab92bbab330804387a23d888db34
+vendor/lib/libchromatix_imx230_zsl_video_lc898212xd.so|fa99836d43aaabba86dcb4f1d22c9fd9b06a0f57
+vendor/lib/libchromatix_imx258_4k_preview_bu64244gwz.so|631f0ef3831a21d2858ddadc288a77add953fbbd
+vendor/lib/libchromatix_imx258_4k_video_bu64244gwz.so|a066538e84744d3b6c13e0ab5a13a2356e2ca412
+vendor/lib/libchromatix_imx258_common.so|f3bdb04e8fa037a22aa9a5efc6c780b3476d49e1
+vendor/lib/libchromatix_imx258_cpp_hfr_120.so|374986beef124cacda951c2af2d53628beb97d2b
+vendor/lib/libchromatix_imx258_cpp_hfr_60.so|93fcc058ba67b5d53b3fbd9772fa152f165df2cd
+vendor/lib/libchromatix_imx258_cpp_hfr_90.so|0a4da8e45f3867f30fcf4c5d378dd96b2c35aaf7
+vendor/lib/libchromatix_imx258_cpp_liveshot.so|ecf8bc1b6202f196afb529619ed6c3eb91574bd5
+vendor/lib/libchromatix_imx258_cpp_preview.so|b9b6e0eac50f9db482e3e60b16827cbf762c9ce2
+vendor/lib/libchromatix_imx258_cpp_snapshot.so|11ab30baf355f5c35dd0e954be98523a44f0a579
+vendor/lib/libchromatix_imx258_cpp_video_4k.so|7482bc3bf6f3f0646299ff86645a7f69ef7477e5
+vendor/lib/libchromatix_imx258_cpp_video.so|e87a4032f0a69f277172754d2b37f77c25d25efd
+vendor/lib/libchromatix_imx258_default_preview_bu64244gwz.so|71d35bd28a6815815ed32b99f28c49bdf805ced7
+vendor/lib/libchromatix_imx258_default_video_bu64244gwz.so|f6f27803313c23c0aa810864cba82d1c99ca8af0
+vendor/lib/libchromatix_imx258_default_video.so|dce3226dcd8c1e1e62ffc018efcea3bcfb1cbd5b
+vendor/lib/libchromatix_imx258_hfr_120_bu64244gwz.so|99f5f393bb39af79f592581af96e7e70c115a4cc
+vendor/lib/libchromatix_imx258_hfr_120.so|ec4af65bd47562d83d28f6f9c4e1daf515e333f7
+vendor/lib/libchromatix_imx258_hfr_60_bu64244gwz.so|8350d0409e58db8d5abad73f134d8a0159246d63
+vendor/lib/libchromatix_imx258_hfr_60.so|ffcb19de5f7a65065de5ee54f52883c19b3ba7b6
+vendor/lib/libchromatix_imx258_hfr_90_bu64244gwz.so|c747a065bb57239aaca07d89239f48121002b274
+vendor/lib/libchromatix_imx258_hfr_90.so|a1f7d097410e560eef1723788cd192e2df89e979
+vendor/lib/libchromatix_imx258_liveshot.so|6a5d1b73e09e4a2bb9ec83b94da87904f8ab1efb
+vendor/lib/libchromatix_imx258_ofilm_4k_preview_dw9800w.so|75ad954f974fe3109449509e4bfd3349fa8f37bf
+vendor/lib/libchromatix_imx258_ofilm_4k_video_dw9800w.so|0ca351ce71edbe2250c16b0e2b1da667200a7d6b
+vendor/lib/libchromatix_imx258_ofilm_common.so|2d15dc14176151d9b35805c6df8e03c1eaac1bcb
+vendor/lib/libchromatix_imx258_ofilm_cpp_hfr_120.so|a01288e1d38e79312d660ca5c07ac03902acf8ba
+vendor/lib/libchromatix_imx258_ofilm_cpp_hfr_60.so|d06486a7e943f8f6f09745895b23b6dd12e498ab
+vendor/lib/libchromatix_imx258_ofilm_cpp_hfr_90.so|03486e80533be479458452b7c327c11627c33d80
+vendor/lib/libchromatix_imx258_ofilm_cpp_liveshot.so|92bba0f6038750e00f18032a79fe195b7fb8c1ea
+vendor/lib/libchromatix_imx258_ofilm_cpp_preview.so|0e0ff6fca2ff861d77ae439f598c582f4ae98dd9
+vendor/lib/libchromatix_imx258_ofilm_cpp_snapshot.so|c3f787fd152f20e7d2173ccc76585f9b673134fe
+vendor/lib/libchromatix_imx258_ofilm_cpp_video_4k.so|81e721a94787eb1819c638e1fcfeff1d2e515dd7
+vendor/lib/libchromatix_imx258_ofilm_cpp_video.so|97c2e1b4f7eb4384a2bcefb2457ff40b62edb144
+vendor/lib/libchromatix_imx258_ofilm_default_preview_dw9800w.so|452c452ff077e9672e34e793a05b8188c9aa3cb0
+vendor/lib/libchromatix_imx258_ofilm_default_video_dw9800w.so|cd30054ed4ca35beb702d2e266d2ec748e075637
+vendor/lib/libchromatix_imx258_ofilm_default_video.so|77bef5bf843eb63284283731c6803486ad23a687
+vendor/lib/libchromatix_imx258_ofilm_hfr_120_dw9800w.so|9256a3bb08bd1edce4804b7c6fb8c13c693fd23b
+vendor/lib/libchromatix_imx258_ofilm_hfr_120.so|52e8f376b1af40525fd2ac08ba03a4d41295bed1
+vendor/lib/libchromatix_imx258_ofilm_hfr_60_dw9800w.so|b70f9df66c57812e0c667db58e8cd77f2cd5c1de
+vendor/lib/libchromatix_imx258_ofilm_hfr_60.so|da8c844f72d4f7b13a11fa0dd5391e69400cac52
+vendor/lib/libchromatix_imx258_ofilm_hfr_90_dw9800w.so|b39bbd319b89f289f1bad93abcd57a93f0f651f4
+vendor/lib/libchromatix_imx258_ofilm_hfr_90.so|445d6bc19cedfb94af1a9aa4cb7fe441662b1816
+vendor/lib/libchromatix_imx258_ofilm_liveshot.so|3aefed41c7ef985ec44d281beecc7c51cb02a180
+vendor/lib/libchromatix_imx258_ofilm_postproc.so|e9437d8742ecd7c967f9766ed1f8667bd546c790
+vendor/lib/libchromatix_imx258_ofilm_preview.so|e5bff5cb4a4c949fc2060681c20348218f0746f1
+vendor/lib/libchromatix_imx258_ofilm_snapshot.so|4a93584cdd0b9786df6aac69d1f2e90b5db7fc7d
+vendor/lib/libchromatix_imx258_ofilm_video_4k.so|1817b574d3095969cda54ba7313b29f2e8f686bb
+vendor/lib/libchromatix_imx258_ofilm_zsl_preview_dw9800w.so|b129b90936da769169a2b072c1815d37213cd9ca
+vendor/lib/libchromatix_imx258_ofilm_zsl_video_dw9800w.so|702da11dc8a49200b6bd5aa4d64ce60f74f302bd
+vendor/lib/libchromatix_imx258_postproc.so|ab70059b4a5d83d3e2472c282d9037a625ad0472
+vendor/lib/libchromatix_imx258_preview.so|7a2b55ac768b8297fe01cf8984226d15044f0255
+vendor/lib/libchromatix_imx258_snapshot.so|c08e5e1f5a203a6c9e3140d7197edd0674c2a7f7
+vendor/lib/libchromatix_imx258_video_4k.so|ed577950f2697b330f8374627306bedbad96d108
+vendor/lib/libchromatix_imx258_zsl_preview_bu64244gwz.so|567bbfa15c0a328f5310635480d6aaade390b00f
+vendor/lib/libchromatix_imx258_zsl_video_bu64244gwz.so|023835bc6a71f4f17c4dc892d5c8812740cbe81d
+vendor/lib/libchromatix_imx298_4K_preview.so|902dd7fd51c8981d10762a94edb2066035081a3b
+vendor/lib/libchromatix_imx298_4K_video.so|11ad663dfada283b78d09828dceea2d2c66570fb
+vendor/lib/libchromatix_imx298_common.so|864c1cca2be9f0bdf59214385781c6cb4838ba94
+vendor/lib/libchromatix_imx298_cpp_hfr_120.so|088910fb7767f27e43a5847dd5b38c4c3ee640a0
+vendor/lib/libchromatix_imx298_cpp_hfr_60.so|6e4ae16a9e3ed28677aad704e926d0411df15b88
+vendor/lib/libchromatix_imx298_cpp_hfr_90.so|281e7094369d102f211c56f3ed8f88a7af056840
+vendor/lib/libchromatix_imx298_cpp_liveshot.so|84160eb3a151c9657f6506b3ffb0c398082c3522
+vendor/lib/libchromatix_imx298_cpp_preview.so|73f7618094636239e8e2640c1734eea60a0fbe22
+vendor/lib/libchromatix_imx298_cpp_snapshot_hdr.so|e89975dbf5c107f697b828b18d942ea4b4df89b7
+vendor/lib/libchromatix_imx298_cpp_snapshot.so|3081e9cc69fee10e0e1ec50da72978af8c5a6d41
+vendor/lib/libchromatix_imx298_cpp_video_hdr.so|6c87db9b926e5790449a65d0301629030214e1a2
+vendor/lib/libchromatix_imx298_cpp_video.so|7d7589ef993adfb8668a53fcbc2c59c52031aca1
+vendor/lib/libchromatix_imx298_default_preview.so|f77c2d0b59e0cce26446c062e54800484aabd0e8
+vendor/lib/libchromatix_imx298_default_video.so|ab1caaf6696612afaf049fe6d8ed1fd4e711737f
+vendor/lib/libchromatix_imx298_hdr_snapshot_3a.so|20c6e7298310dd3d350362d11de8ea8e8bcd6f3c
+vendor/lib/libchromatix_imx298_hdr_video_3a.so|5946ace57864b6d26d407b43d09eeb59663cf700
+vendor/lib/libchromatix_imx298_hfr_120_3a.so|50917a14143de21b87ccdf8ec6582fd98fdee111
+vendor/lib/libchromatix_imx298_hfr_120.so|ebbd78f631201f1a59a15f16a94ddc6e4f8286f5
+vendor/lib/libchromatix_imx298_hfr_60_3a.so|328f4a1f571b8ecf92b7308906fb14d2b52f48d3
+vendor/lib/libchromatix_imx298_hfr_60.so|3b335bcd58008e2ca09d3f686dc1f74d2f739510
+vendor/lib/libchromatix_imx298_hfr_90_3a.so|9013b8ef35a0710c31670167fb5860d70f99afa9
+vendor/lib/libchromatix_imx298_hfr_90.so|342fd5a223fc2982a9c6b7dd7d76c0fe9a41edf5
+vendor/lib/libchromatix_imx298_liveshot.so|73b4ca0673688420db4a2d085cef83bb7a2662d9
+vendor/lib/libchromatix_imx298_postproc.so|b8878cf701f009b9cb17cbcbcaf5417c9e8493cf
+vendor/lib/libchromatix_imx298_preview.so|6648cebc6099078c76a3249a1c85d881bfcd71ca
+vendor/lib/libchromatix_imx298_snapshot_hdr.so|96527d4d7fb29eaf8cc58e8d90298712343ab164
+vendor/lib/libchromatix_imx298_snapshot.so|5cfaf28a60127e6a612866a517dad82400815686
+vendor/lib/libchromatix_imx298_video_hdr.so|ffa57a1e6439708c5f66d0b9ed2386aedfac47eb
+vendor/lib/libchromatix_imx298_video.so|d941a091e7dfd553f7b423d2563325fcfb87ddf8
+vendor/lib/libchromatix_imx298_zsl_preview.so|5695aa2b56575e916dd3ede19d4f4bae2c43d160
+vendor/lib/libchromatix_imx298_zsl_video.so|002ef97126172ed28eb665d0cc8350d52d643e42
+vendor/lib/libchromatix_ov13850_common.so|e1b6f05d1433d06d22f1bea3829c15e73b3dbd42
+vendor/lib/libchromatix_ov13850_cpp_ds_chromatix.so|87d59d620fb2b374716f4c979413983a83b83dda
+vendor/lib/libchromatix_ov13850_cpp_hfr_120.so|b4716eb3e7107611506728f9d51f8b32a80248d9
+vendor/lib/libchromatix_ov13850_cpp_hfr_60.so|ffccc2f487904cc05c57df88aac4e74d5e1535f3
+vendor/lib/libchromatix_ov13850_cpp_hfr_90.so|5e1504d56538689816b512570f125ea6a96ed5f3
+vendor/lib/libchromatix_ov13850_cpp_liveshot.so|1e6d4e4fb341c5ca7f77e8d72e1e4354342a1757
+vendor/lib/libchromatix_ov13850_cpp_preview.so|38e64e99c3c7371db61b882b10fd9172c24a8d3d
+vendor/lib/libchromatix_ov13850_cpp_snapshot.so|3d7a2e6b43bbaa56bae5e4388fd9523d28780a24
+vendor/lib/libchromatix_ov13850_cpp_us_chromatix.so|79f69802b335a3bc8c38c67d0cc067f5072b7e7c
+vendor/lib/libchromatix_ov13850_cpp_video_full.so|875e9a0df023f727722863dee331afad8291f0bc
+vendor/lib/libchromatix_ov13850_cpp_video.so|fc4948324c84a050a13ca00d1e00af7c60cbe8ad
+vendor/lib/libchromatix_ov13850_default_preview_lc898212xd.so|0d43f3eb84a3eec1469db08401cc7b6ebed8b23a
+vendor/lib/libchromatix_ov13850_default_video_lc898212xd.so|617d50f5848983186e380ba854dd88c57eb179c5
+vendor/lib/libchromatix_ov13850_default_video.so|af1941edc1937e7d3a283109290457d68e88f559
+vendor/lib/libchromatix_ov13850_hfr_120_lc898212xd.so|2971252ba7e82b124a74eef0b5d7d2fbff7e4938
+vendor/lib/libchromatix_ov13850_hfr_120.so|f10b3ad3f2ea1ab85bee2a89f8b261a352f76123
+vendor/lib/libchromatix_ov13850_hfr_60_lc898212xd.so|b860ed077a737937d949b348d2e8a2b9d1478bfa
+vendor/lib/libchromatix_ov13850_hfr_60.so|c61df5d1148bf434154d4d213423e2ce62ee9d72
+vendor/lib/libchromatix_ov13850_hfr_90_lc898212xd.so|0329d88026b2c827d34658309e0169b5a8575d77
+vendor/lib/libchromatix_ov13850_hfr_90.so|2fe6ba52ddc768cb766300503071672316d5c66e
+vendor/lib/libchromatix_ov13850_liveshot.so|bc36e866da39d84313882dcfcd3039aeab445c73
+vendor/lib/libchromatix_ov13850_postproc.so|dd87073723250daa40f961958bd9bfa28ff30ab1
+vendor/lib/libchromatix_ov13850_preview.so|17eacf3a47008abe163ebb081b19e5c4fb6e798c
+vendor/lib/libchromatix_ov13850_q13v06k_common.so|1e0004a771be79cb76d70c004122fe889f049f7b
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_ds_chromatix.so|9748e3a7db444df83e2f71bd50045bc619262c9a
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_hfr_120.so|fecb4e8c29f11af4ea374b688abc8ed2f853ecf5
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_hfr_60.so|72569d5bb5ffe3162776ba03add197b66ac8ca34
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_hfr_90.so|42a125e4378d78a4570f8ac9cc4c53806937e999
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_liveshot.so|6d88fc9a2c42b1a7d3d9bad5b3e8be3fcfcfc3fb
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_preview.so|04e8e40933ae44ce7ba54bceb084f1d40d5741a5
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_snapshot.so|a97c01b90f3e93472c0a17a4e94d427d1b53fccc
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_us_chromatix.so|c74f51753608b869e3bcd6ee6ea92095bea8cc55
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_video_full.so|4adc255cabb76fb3588a22e35508feb022b82d77
+vendor/lib/libchromatix_ov13850_q13v06k_cpp_video.so|c19cb422c5542305f8bfb3b49aa5d21c88b53159
+vendor/lib/libchromatix_ov13850_q13v06k_default_preview_bu64297.so|d016f40230e8c10ab5c10d780822847d5b7a9128
+vendor/lib/libchromatix_ov13850_q13v06k_default_video_bu64297.so|acedc347fac6e4ff0e7501b5d96dae67542dd0db
+vendor/lib/libchromatix_ov13850_q13v06k_default_video.so|c99eee38e296c3df6ddb988cc66ba271002218ed
+vendor/lib/libchromatix_ov13850_q13v06k_hfr_120_bu64297.so|69bcbf7d4646dc8b00a9b9c9e3f103ce4cf2b02a
+vendor/lib/libchromatix_ov13850_q13v06k_hfr_120.so|155b1f0b8a0b70cd0e7e6893d80915918088421b
+vendor/lib/libchromatix_ov13850_q13v06k_hfr_60_bu64297.so|4d0c6c3a6865b3a86ebe10c3ebde11ef60f17b4a
+vendor/lib/libchromatix_ov13850_q13v06k_hfr_60.so|5a527d19d9b4d48697f1753282c0120be03c5fed
+vendor/lib/libchromatix_ov13850_q13v06k_hfr_90_bu64297.so|c3dc94ba6d11dc4a1438ec79495dd0e1551fd134
+vendor/lib/libchromatix_ov13850_q13v06k_hfr_90.so|830a0defb5ee8df604f548261a6baf0f4d2e64ff
+vendor/lib/libchromatix_ov13850_q13v06k_liveshot.so|a0766119df7299e6e04ba67765598eb8b9000f82
+vendor/lib/libchromatix_ov13850_q13v06k_postproc.so|f138b4d2cb027c96515f780a198fb7953fc87997
+vendor/lib/libchromatix_ov13850_q13v06k_preview.so|c03890eaee3f127ead81602f068874ca7fac4373
+vendor/lib/libchromatix_ov13850_q13v06k_snapshot.so|6d42bfc634dbc6e40619fe50169756651b699bfc
+vendor/lib/libchromatix_ov13850_q13v06k_video_full.so|50a125c0c06db739690fb57a9cc01a472c026712
+vendor/lib/libchromatix_ov13850_q13v06k_zsl_preview_bu64297.so|0f57bc19187e98680d592afdc13902ed018a41a2
+vendor/lib/libchromatix_ov13850_q13v06k_zsl_video_bu64297.so|12d8809c6dda1bdc993d2078d88541d27bc4cf7b
+vendor/lib/libchromatix_ov13850_snapshot.so|770d1d765cfff93c30d60a8162ccaac8279c3891
+vendor/lib/libchromatix_ov13850_video_full.so|bc3b92bf20e5949d05631ca4257bde96fbcd28bc
+vendor/lib/libchromatix_ov13850_zsl_preview_lc898212xd.so|72a84eac2d78fea6ec8f151a927715a82b3f5008
+vendor/lib/libchromatix_ov13850_zsl_video_lc898212xd.so|cdc566b5ac8c8780601a1e3f0cc2a4570120fbd2
+vendor/lib/libchromatix_ov4688_common.so|52cd7304ca53822c2b664b8cd4f02687d4132e76
+vendor/lib/libchromatix_ov4688_cpp_hfr_120.so|23b0f42d255573e048ed740be0df4d0c3fb96ac5
+vendor/lib/libchromatix_ov4688_cpp_hfr_60.so|85df9451638f211b1e7470bfc2ba70ffcd135217
+vendor/lib/libchromatix_ov4688_cpp_hfr_90.so|dbafd735d41013d1e9abe467c0817a68df575acc
+vendor/lib/libchromatix_ov4688_cpp_liveshot.so|6c00b826bc183b76fb85b433f1df8af901c6e9b2
+vendor/lib/libchromatix_ov4688_cpp_preview.so|9a72ef03b0de3f1bab3915d31f8582f7bfe0af7a
+vendor/lib/libchromatix_ov4688_cpp_snapshot.so|31f588d4fa300163e16fd7d359aac3f8fcde734a
+vendor/lib/libchromatix_ov4688_cpp_video.so|1560d9d256c40c64d233ea33e38ac08595edda49
+vendor/lib/libchromatix_ov4688_default_video.so|72f4e5a729a277b62250485af373bb52919691bb
+vendor/lib/libchromatix_ov4688_hfr_120_ad5823.so|a7d5783f3d8fcc4ac283b717a8c176995383ba85
+vendor/lib/libchromatix_ov4688_hfr_120.so|af0473e43880b8d9eeb44f5cc2eb3d40413073b9
+vendor/lib/libchromatix_ov4688_hfr_60_ad5823.so|0ed27c3002ec378bf4317f8e44e53e90cbd362c6
+vendor/lib/libchromatix_ov4688_hfr_60.so|360240377382f73a2eb1e58d010a38280092b1a6
+vendor/lib/libchromatix_ov4688_hfr_90_ad5823.so|94416ce80ce4aead2eff2757865a603ebf879a04
+vendor/lib/libchromatix_ov4688_hfr_90.so|aa2a6803ce58b5835ad4c339fe8d37ef5c55d3dc
+vendor/lib/libchromatix_ov4688_liveshot.so|c524250c295798fd2043907730e023d9e076a7ba
+vendor/lib/libchromatix_ov4688_postproc.so|5063269edb0d57516c59c08607d744db878b77bb
+vendor/lib/libchromatix_ov4688_preview.so|fea243d16aebf8c7e7e81ee0d3b5cb1c1fe378a0
+vendor/lib/libchromatix_ov4688_snapshot.so|82b21cce68f29e37da8f997b9900d2c8115cedad
+vendor/lib/libchromatix_ov4688_zsl_preview_ad5823.so|8aa709a70fd161972f1a2c5b3df1e18882c18637
+vendor/lib/libchromatix_ov4688_zsl_video_ad5823.so|97a85f78d523d034643399de555a90dc9c8630b7
+vendor/lib/libchromatix_ov5670_a3_default_preview.so|949084b42105793a5c12a0ad1852989be5f9ee1f
+vendor/lib/libchromatix_ov5670_a3_default_video.so|ab051fb85f89eb088a8d868fc1ec36f244aacee4
+vendor/lib/libchromatix_ov5670_a3_hfr_120.so|59122bd16a4007fa8f0d3d3b17d2205919c13385
+vendor/lib/libchromatix_ov5670_a3_hfr_60.so|38c155b3a438a4764903fd58104cb650cfea4229
+vendor/lib/libchromatix_ov5670_a3_hfr_90.so|4d55563631c9ed88276f7563a5e1b13c1efb34cc
+vendor/lib/libchromatix_ov5670_common.so|db8854f31de1a551765a11d63a1a5efd6253c836
+vendor/lib/libchromatix_ov5670_cpp_ds_chromatix.so|4bd1c0bc8b12f36a2fc27794dd329571052b0490
+vendor/lib/libchromatix_ov5670_cpp_hfr_120.so|396a8c20e4d82b6a451033d2cd856e88f03151ff
+vendor/lib/libchromatix_ov5670_cpp_hfr_60.so|a8d37341280d41c587ec92e82a4c0e00a00d5f20
+vendor/lib/libchromatix_ov5670_cpp_hfr_90.so|23ad76f9186294663170488a8b46cd8f290f7fd9
+vendor/lib/libchromatix_ov5670_cpp_liveshot.so|86ba02937323e9e8cf834445121c5983732ec4f6
+vendor/lib/libchromatix_ov5670_cpp_preview.so|cf84967e8212a1d6e5a9bfb4f42dab0874d527b7
+vendor/lib/libchromatix_ov5670_cpp_snapshot.so|2a9e13ef9dfdfc7bb137b97ee5c0e30440f8df05
+vendor/lib/libchromatix_ov5670_cpp_us_chromatix.so|f2b6accff02c9eacf9badf415243934a636afde6
+vendor/lib/libchromatix_ov5670_cpp_video_full.so|84814a6d6d23a4504ea03ac1ce78a8680392a0f3
+vendor/lib/libchromatix_ov5670_cpp_video.so|a127c0bce285b0060e249670209bbfc40e18f350
+vendor/lib/libchromatix_ov5670_default_video.so|19260ee6400392d100a75e8047fac103d310232a
+vendor/lib/libchromatix_ov5670_hfr_120.so|163e4aba1791e9909036b6509d4fa3e0a33e8f35
+vendor/lib/libchromatix_ov5670_hfr_60.so|029902eb6728ea56a43d3d64bfc805a508c5401f
+vendor/lib/libchromatix_ov5670_hfr_90.so|7559681694721912f8f8d847e23c2aa6f6973665
+vendor/lib/libchromatix_ov5670_postproc.so|f659d70edf46ccd917060e1420bf5578a5c05234
+vendor/lib/libchromatix_ov5670_preview.so|4b0db6d4eb2eccbed4625a8be7cc36d81e5f0554
+vendor/lib/libchromatix_ov5670_snapshot.so|44bb17e7a4a527ce4b64c2438e7c8bc991d2cb3f
+vendor/lib/libchromatix_ov5670_video_full.so|b9cc4e707f9a8025b5b2627f410708eb2d710dd8
+vendor/lib/libchromatix_ov5670_zsl_preview.so|b7144e83bfdfa2b53c785174fabce2e5676aba8d
+vendor/lib/libchromatix_ov5670_zsl_video.so|c3f1d9db5d046f92ba9755608559264ae0e3deb9
+vendor/lib/libchromatix_ov8856_a3_default_preview.so|825b0e83a02c4737f35a166babc149cd7cd229a7
+vendor/lib/libchromatix_ov8856_a3_default_video.so|1dc805aa79695530f97bab96e0185a8223633184
+vendor/lib/libchromatix_ov8856_a3_hfr_120.so|f37310754c481f5ebf03cba93802a95c720dd16e
+vendor/lib/libchromatix_ov8856_a3_hfr_60.so|50186bd7e4c8b54f02968f79cbf70a33c379f5e0
+vendor/lib/libchromatix_ov8856_a3_hfr_90.so|d6a6c022790327fb1e07cf3737b1f072ce99a290
+vendor/lib/libchromatix_ov8856_cmb199_a3_default_preview.so|5f7abbba1806773b139ae04d2c0d2443fc5b702b
+vendor/lib/libchromatix_ov8856_cmb199_a3_default_video.so|d7c8833a1af93a88c8d2bddc2cf7078dcc39ae45
+vendor/lib/libchromatix_ov8856_cmb199_a3_hfr_120.so|b6a3143ee88639c694cc775a02ea53ce303e3ece
+vendor/lib/libchromatix_ov8856_cmb199_a3_hfr_60.so|16ce4563f2e41e87bd06d15880035a7b7c88a300
+vendor/lib/libchromatix_ov8856_cmb199_a3_hfr_90.so|b5609e9ff34f740cdfab7f66a4c768cbaf4732bb
+vendor/lib/libchromatix_ov8856_cmb199_common.so|3cfe0aa22d8102046238a74678674bd5e7c0428c
+vendor/lib/libchromatix_ov8856_cmb199_cpp_ds_chromatix.so|05af19d2dc87fb8dffecbfc6944b466840d953d9
+vendor/lib/libchromatix_ov8856_cmb199_cpp_hfr_120.so|288af80d04969d26fd83e27d225bbcae3d724de4
+vendor/lib/libchromatix_ov8856_cmb199_cpp_hfr_60.so|7a1c9c1805e3145d3503b0b9d649e65b1b6126b2
+vendor/lib/libchromatix_ov8856_cmb199_cpp_hfr_90.so|870db7c83b07760b3628c6a5dd23a112609818af
+vendor/lib/libchromatix_ov8856_cmb199_cpp_liveshot.so|db5ac9cafecde5c7db739b4e68117365daf4c922
+vendor/lib/libchromatix_ov8856_cmb199_cpp_preview.so|c3f89d603d916a07e943953e3ebe1a2a9a120d13
+vendor/lib/libchromatix_ov8856_cmb199_cpp_snapshot.so|e915aca0235b1e10114e80a002f3b81e915ab3cd
+vendor/lib/libchromatix_ov8856_cmb199_cpp_us_chromatix.so|067732a8695100c67201de90b4800d3cde52af4a
+vendor/lib/libchromatix_ov8856_cmb199_cpp_video_full.so|4792483f200c8e3270cbc9849b2255388e969cff
+vendor/lib/libchromatix_ov8856_cmb199_cpp_video.so|508f299f2753e7b6a96f8d70252b3d4fe936ddf6
+vendor/lib/libchromatix_ov8856_cmb199_default_video.so|cc8b0755973bc4b257dc882b5bb7226203b0c258
+vendor/lib/libchromatix_ov8856_cmb199_hfr_120.so|db03a24f2304ad26454e1b86876d72f0f7f53cfa
+vendor/lib/libchromatix_ov8856_cmb199_hfr_60.so|a79fab2018097e06db3ae4657d5c8bdb49e10ed5
+vendor/lib/libchromatix_ov8856_cmb199_hfr_90.so|2956a400eb5384752981fdcac1098cd550911751
+vendor/lib/libchromatix_ov8856_cmb199_postproc.so|b7017a79eba4fb4be44c40656352c162b9248833
+vendor/lib/libchromatix_ov8856_cmb199_preview.so|d8d9d4b78a926a964dcbe0e3befb83447e6ecfa1
+vendor/lib/libchromatix_ov8856_cmb199_snapshot.so|8fc5c871c0df84857239ecfea36e3fa6be201181
+vendor/lib/libchromatix_ov8856_cmb199_video_full.so|77a6296a1a1477b5cf0ffabf0872727be526ccaf
+vendor/lib/libchromatix_ov8856_cmb199_zsl_preview.so|faed2b412bfd9d0e4d56d5a4d0837e6bdb83e2ac
+vendor/lib/libchromatix_ov8856_cmb199_zsl_video.so|5bc9837f483acf93c93e20135120be191026b990
+vendor/lib/libchromatix_ov8856_common.so|66ea83cb38baf7ab7d3b2dcc7292f702f632ace2
+vendor/lib/libchromatix_ov8856_cpp_ds_chromatix.so|d4af992588680002e7dfeebcdfdc7e619434e3f1
+vendor/lib/libchromatix_ov8856_cpp_hfr_120.so|21f6ec84dc5e403ff19530e7ca844f2a5a51dbf6
+vendor/lib/libchromatix_ov8856_cpp_hfr_60.so|718a2d6229a03a260d49d831050791fbf5ee2aae
+vendor/lib/libchromatix_ov8856_cpp_hfr_90.so|071bbd987ef16470513d8fb36982887187f6e1f5
+vendor/lib/libchromatix_ov8856_cpp_liveshot.so|f28e14717871116eb31e05e538617ca9bca6d86a
+vendor/lib/libchromatix_ov8856_cpp_preview.so|f1263ddd3e45d55091d071012056b2d1008cc803
+vendor/lib/libchromatix_ov8856_cpp_snapshot.so|32dc7f786a358e95c54e2a5dec7d124177473775
+vendor/lib/libchromatix_ov8856_cpp_us_chromatix.so|638c6b5f640d47fce0c8da1b505ac15cea436adc
+vendor/lib/libchromatix_ov8856_cpp_video_full.so|e441e8dcf59bd26ec97181dcf79ee409084442bd
+vendor/lib/libchromatix_ov8856_cpp_video.so|767d8d7a40c7736117c0d026c8e63cacb6e39f56
+vendor/lib/libchromatix_ov8856_default_video.so|b9225d5ae7f2dc15dd81f37c57a52247a7c42fc8
+vendor/lib/libchromatix_ov8856_hfr_120.so|a94e3f719f1f55b831d41eb1070855911800af2e
+vendor/lib/libchromatix_ov8856_hfr_60.so|09f1170619d9529d8c78256c58266dda7f67323d
+vendor/lib/libchromatix_ov8856_hfr_90.so|d22d3fc22e435a8bfe92af3958ad20ef38401a01
+vendor/lib/libchromatix_ov8856_postproc.so|214dee52035b22e4c59964c6a7097b7a3be40154
+vendor/lib/libchromatix_ov8856_preview.so|f9693c534c1a1f1709356b6ef3e19fb50e07575a
+vendor/lib/libchromatix_ov8856_snapshot.so|d284ba91071a6b1781088e67d5628e6267b4a0e9
+vendor/lib/libchromatix_ov8856_video_full.so|2e1241737915138d18d899a1f49d160aee1bbd22
+vendor/lib/libchromatix_ov8856_zsl_preview.so|550f0b96126d0a3d292ab2750e353cf3a6316c42
+vendor/lib/libchromatix_ov8856_zsl_video.so|269d32242faad9a351cf3749a80abb706e3d055c
+vendor/lib/libchromatix_ov8858_a3_default_preview.so|9b50015ebcc00df9979929ed53ac448b68d87bf4
+vendor/lib/libchromatix_ov8858_a3_default_video.so|4e5189dfe765b5c65be1d58c06f0c88d1c350726
+vendor/lib/libchromatix_ov8858_a3_hfr_120.so|0cc42046541cc3067c843546054f9aa6b2a2dcad
+vendor/lib/libchromatix_ov8858_a3_hfr_60.so|f6bf876b92f8e8546301afc8b2de9e2bcc1b5e8c
+vendor/lib/libchromatix_ov8858_a3_hfr_90.so|42dff80240477cd7c29cf26f44e5f845a9debf8c
+vendor/lib/libchromatix_ov8858_common.so|7cdc77b2904015f0da3b118ce382ecbfad730838
+vendor/lib/libchromatix_ov8858_cpp_ds_chromatix.so|88147409eb2496042b765da0c0bdb825f390808d
+vendor/lib/libchromatix_ov8858_cpp_hfr_120.so|97e9ea725025e60b2a37a588e1241d88e1ec0248
+vendor/lib/libchromatix_ov8858_cpp_hfr_60.so|9d64a2289cc7c446a349bc389e400b9e4942320d
+vendor/lib/libchromatix_ov8858_cpp_hfr_90.so|1aa78c2074d09382ac540978869605764486b504
+vendor/lib/libchromatix_ov8858_cpp_liveshot.so|1eb5f282f28c8b88ae5481974509f6c12ad9a7cc
+vendor/lib/libchromatix_ov8858_cpp_preview.so|4756b244cc683981af531eb984a97d1cf8c0053b
+vendor/lib/libchromatix_ov8858_cpp_snapshot.so|88032d10d72b9e6f1abe1fc2d1786a3fb386b2b9
+vendor/lib/libchromatix_ov8858_cpp_us_chromatix.so|8aa5a48eb4ec01652166922d9521c8a7e89d9661
+vendor/lib/libchromatix_ov8858_cpp_video.so|95ea444b9718477284c1e1be04fcda424c7ea225
+vendor/lib/libchromatix_ov8858_d8v03c_a3_default_preview.so|7eed6a023cd6a6c9e828c9fb92a3c9635997b6d5
+vendor/lib/libchromatix_ov8858_d8v03c_a3_default_video.so|f234d934ccecdc9abd70cc48e282896e54715888
+vendor/lib/libchromatix_ov8858_d8v03c_a3_hfr_120.so|e611b9928df609dce7570b3786e07da85448d637
+vendor/lib/libchromatix_ov8858_d8v03c_a3_hfr_60.so|e4b0af5caff6246ba4d5e3e4ad98eb410ba495b3
+vendor/lib/libchromatix_ov8858_d8v03c_a3_hfr_90.so|aef6653ccb19f10c8fa08acffb50499c3a08288e
+vendor/lib/libchromatix_ov8858_d8v03c_common.so|4390a0303bb415ef647ad7fd3143d86f41176caa
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_ds_chromatix.so|9c54c834ff54bc8364e59822b479791d2827f20a
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_hfr_120.so|ca9f08ab85199295a3dbbc487a4f0ac3f25f6749
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_hfr_60.so|9652ac8d11fddfccf30ceb44437484c69db78289
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_hfr_90.so|e34f4bb96e3648afc9157b8263873199a040d788
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_liveshot.so|f351d0cf652c001ba15b9c22509f9b2d3fd4b39c
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_preview.so|bf85efbbb7bd6f8bff79865f0ade03908a7c15c8
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_snapshot.so|2721a6dca9194a5170aa9f9bacb8ba511af0beb9
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_us_chromatix.so|67505728715f38293d65c50ddd1070c2cbe94fb2
+vendor/lib/libchromatix_ov8858_d8v03c_cpp_video.so|2fde727d69996565adf9c45dc624f9896304b16d
+vendor/lib/libchromatix_ov8858_d8v03c_default_video.so|a9d9305499f879c0b99cac132cdf7df5d5a6f2bb
+vendor/lib/libchromatix_ov8858_d8v03c_hfr_120.so|5d323d96dad33e4bd6928ff6b4676396ea008060
+vendor/lib/libchromatix_ov8858_d8v03c_hfr_60.so|2cea84724b20b702e1f7349bd500aea7cf29d1ec
+vendor/lib/libchromatix_ov8858_d8v03c_hfr_90.so|f91657d6a54484400c48407dbcc785fe4c260ec1
+vendor/lib/libchromatix_ov8858_d8v03c_liveshot.so|487f2c080a5e26e09d7a9615d483d896a874da68
+vendor/lib/libchromatix_ov8858_d8v03c_postproc.so|15b183abe4aa0bfd08ae00d8a7ced8f408e4b3a6
+vendor/lib/libchromatix_ov8858_d8v03c_preview.so|a5284a4219d993e9b64684bea6eeefe5c8999f82
+vendor/lib/libchromatix_ov8858_d8v03c_snapshot.so|5a77fd8975f41a2cf615546f094e9a9666c267ed
+vendor/lib/libchromatix_ov8858_d8v03c_zsl_preview.so|1d1b32b4831dbfa7186cd64bb524852862df96eb
+vendor/lib/libchromatix_ov8858_d8v03c_zsl_video.so|3aa35259b9e1be36d1fa59776d08cf7b8775d92a
+vendor/lib/libchromatix_ov8858_default_video.so|a4f651c519682109b41e87020daffff4e29aa501
+vendor/lib/libchromatix_ov8858_hfr_120.so|362256c18cf44e755dccbf217aef392d4e48d3b0
+vendor/lib/libchromatix_ov8858_hfr_60.so|da87767d34dcfba037ee55c048a3a792a4f4c94e
+vendor/lib/libchromatix_ov8858_hfr_90.so|6376c56ee7a479f9d15b1ed9b659a3e93ad3d434
+vendor/lib/libchromatix_ov8858_liveshot.so|8efb3013121bb54a2599995a6fc71c4a39cbb085
+vendor/lib/libchromatix_ov8858_postproc.so|0de26a57bbc370db6f5bb272da981cc10f7e8219
+vendor/lib/libchromatix_ov8858_preview.so|138d73ca69fe60dc6b72b440a18ccbe6bdfdd8fd
+vendor/lib/libchromatix_ov8858_snapshot.so|df030c415fe029cd96892dfaf5b0dc86739a660b
+vendor/lib/libchromatix_ov8858_zsl_preview.so|c5a468a3b31b2c6b8f0659ca04ee88862296c35e
+vendor/lib/libchromatix_ov8858_zsl_video.so|87236a23fc878384529d6af615ae1c7bd3ba712d
+vendor/lib/libchromatix_ov8865_common.so|19f3f60684890373ac2c669aed0bddd0b7602497
+vendor/lib/libchromatix_ov8865_cpp_ds_chromatix.so|143c53a77d1fb138e00e55bcde6a59e45e7ce13c
+vendor/lib/libchromatix_ov8865_cpp_hfr_120.so|319e5c64ea637bde26e64a23d8008084c78081b8
+vendor/lib/libchromatix_ov8865_cpp_hfr_60.so|7a86853e6f5e13dbb50841a0c931ca0b01ffbf7b
+vendor/lib/libchromatix_ov8865_cpp_hfr_90.so|29920cacd2989eeb5364c5efa8b56f7390174542
+vendor/lib/libchromatix_ov8865_cpp_liveshot.so|1349d5af606793e8d4a21fce3448f0da65d42e94
+vendor/lib/libchromatix_ov8865_cpp_preview.so|a8776734afd42b5c019d7953bac5c6af5103227e
+vendor/lib/libchromatix_ov8865_cpp_snapshot.so|91374adae9bd792282151d5b668ed6d7c77791f9
+vendor/lib/libchromatix_ov8865_cpp_us_chromatix.so|0cc10ebd11afef644866121e3f5d927f792f74d5
+vendor/lib/libchromatix_ov8865_cpp_video_full.so|af995b9bd736a75cb4dd1fd413a56293bb7f129b
+vendor/lib/libchromatix_ov8865_cpp_video.so|68acd58d0b8cf32c8d06e61e653acdca31f36b76
+vendor/lib/libchromatix_ov8865_default_preview_dw9714.so|316cf278a4f8b8bba009db9b3eed22c26fb0dec1
+vendor/lib/libchromatix_ov8865_default_video_dw9714.so|8f11af8c13b2f8ed23f14c21cd8678f17e573d22
+vendor/lib/libchromatix_ov8865_default_video.so|ddcad50289bf9f8bd4dcb7e0a6562350a552daab
+vendor/lib/libchromatix_ov8865_hfr_120_dw9714.so|689e1808bd4d655021f4fe1b564e8351fb756f4c
+vendor/lib/libchromatix_ov8865_hfr_120.so|10d72be7bb6150ef5585023aeb9f50783b204362
+vendor/lib/libchromatix_ov8865_hfr_60_dw9714.so|6086e5438ae74e32b237d75dae96cd5ea3f2a8b6
+vendor/lib/libchromatix_ov8865_hfr_60.so|52e556a5558614d35394162caef87a8be2680fe9
+vendor/lib/libchromatix_ov8865_hfr_90_dw9714.so|93fcbd29952e025a531c518af38c56c2a4a4fcc2
+vendor/lib/libchromatix_ov8865_hfr_90.so|244be5010b03476be853468c8b88b8fb2cbbcb19
+vendor/lib/libchromatix_ov8865_liveshot.so|e58680556b07c1e178379fe03a3a3884c97e5dd0
+vendor/lib/libchromatix_ov8865_postproc.so|d1c8c77143c0d644e12e6040e5bab172b5c6c933
+vendor/lib/libchromatix_ov8865_preview.so|5ce45072d764376a4316cdf9ff6f64317498105a
+vendor/lib/libchromatix_ov8865_snapshot.so|86ffd03478d6df8591ee490447374edf07956076
+vendor/lib/libchromatix_ov8865_video_full.so|1834e6848f9c50d08089a1c10a41556b6fcda618
+vendor/lib/libchromatix_ov8865_zsl_preview.so|d3f5fd9b4e9e208e873bde7a96ccc15f71733e8a
+vendor/lib/libchromatix_ov8865_zsl_video.so|785fc1a88b59f4c5599738342846edc0a0128a1a
+vendor/lib/libchromatix_s5k3m2xm_common.so|a480580366f2b9c18e0faafeba654a955344f093
+vendor/lib/libchromatix_s5k3m2xm_cpp_hfr_120.so|80234a854c9448533b12b86b5fa5a82522465e96
+vendor/lib/libchromatix_s5k3m2xm_cpp_hfr_60.so|a331def0b3837a57dde7ffb5816a467875fa5647
+vendor/lib/libchromatix_s5k3m2xm_cpp_hfr_90.so|593348371693b00da20645190de55d7fcd31ed90
+vendor/lib/libchromatix_s5k3m2xm_cpp_liveshot.so|270c5fa43b7dd84c50fa39e23bd699e21d74b10e
+vendor/lib/libchromatix_s5k3m2xm_cpp_preview.so|28e5c9e1e67075ad25d19b1f2200071652897c5d
+vendor/lib/libchromatix_s5k3m2xm_cpp_snapshot.so|74eae80f8cadc3278d450cbe2cf8069657c4605e
+vendor/lib/libchromatix_s5k3m2xm_cpp_video.so|d96ac68b31c8bc64f32514fddd6dd7d24917561b
+vendor/lib/libchromatix_s5k3m2xm_default_preview_dw9761b.so|1eadfc7e112b77ddb6e4a0860fa6835e0622101f
+vendor/lib/libchromatix_s5k3m2xm_default_video_dw9761b.so|4e668616beaf43f465183ce5e8ba128d9d10b8ec
+vendor/lib/libchromatix_s5k3m2xm_default_video.so|46d15d001c32c235e6751eb548a8b31a5f2ce902
+vendor/lib/libchromatix_s5k3m2xm_hfr_120_dw9761b.so|820622b9c43200cfd3c7ddcd5009b32b541eeb4e
+vendor/lib/libchromatix_s5k3m2xm_hfr_120.so|17b426ccac8a9108df7bdddeca041d8531d59798
+vendor/lib/libchromatix_s5k3m2xm_hfr_60_dw9761b.so|0945fb6250136ccd622ff083c2a27c40c712917b
+vendor/lib/libchromatix_s5k3m2xm_hfr_60.so|61e94a28607ad7bb814411d10f57c65a506bc509
+vendor/lib/libchromatix_s5k3m2xm_hfr_90_dw9761b.so|677e04f745247cc4a874df4339d68dc30dd0da3c
+vendor/lib/libchromatix_s5k3m2xm_hfr_90.so|4791c1f69f5ce314b76ede79fd9392ba6d6051d8
+vendor/lib/libchromatix_s5k3m2xm_liveshot.so|1b6437e50559b892d208ea793ab5b1161d2627f9
+vendor/lib/libchromatix_s5k3m2xm_postproc.so|ff1be86357750467d7050a6426e299913c9acdf0
+vendor/lib/libchromatix_s5k3m2xm_preview.so|fcda44ebe07020e63c9d986e64559360bed18ac8
+vendor/lib/libchromatix_s5k3m2xm_snapshot.so|7bdd0e6797971e29301ab780c8f64cda40edfe56
+vendor/lib/libchromatix_s5k3m2xm_zsl_preview_dw9761b.so|3375cca9d98c780b281ebae8b68f29015c471ce2
+vendor/lib/libchromatix_s5k3m2xm_zsl_video_dw9761b.so|898abaf0e39a2c861d834fb5888b9b9e8d7be13f
+vendor/lib/libchromatix_s5k3m2xx_1080p_preview_ad5816g.so|e6508d577a4c47b0c17a43fa1907ab20dc713338
+vendor/lib/libchromatix_s5k3m2xx_1080p_video_ad5816g.so|d7c92c4d343614f988a80e27775fb33d41e440ea
+vendor/lib/libchromatix_s5k3m2xx_4k_preview_ad5816g.so|3d6b06c8ff137b41e508a993966b15b9e21f53ca
+vendor/lib/libchromatix_s5k3m2xx_4k_video_ad5816g.so|31e57db002d34ef48b15922198446e9a791cf542
+vendor/lib/libchromatix_s5k3m2xx_common.so|022ebf45b1e9fd5f192dfc6dcb013091380e105f
+vendor/lib/libchromatix_s5k3m2xx_cpp_hfr_120.so|ab928cf73ef5ab7691933195c35792a055002ed6
+vendor/lib/libchromatix_s5k3m2xx_cpp_hfr_60.so|2deb05001b7b5bb9b7dd97fe0b906a5f4ec102a3
+vendor/lib/libchromatix_s5k3m2xx_cpp_hfr_90.so|d2906efb17f0ee64fcc7fc36ac6ad238cb90c4e1
+vendor/lib/libchromatix_s5k3m2xx_cpp_liveshot.so|0ce1516e6ef9debc7fa1eb8b28ba830ddca576c4
+vendor/lib/libchromatix_s5k3m2xx_cpp_preview.so|4b9e5c5fa7d588f3319a3c2a2542fb080cbeebec
+vendor/lib/libchromatix_s5k3m2xx_cpp_snapshot.so|3b2dbdb59f07d038342da84e3522b1bb623729f3
+vendor/lib/libchromatix_s5k3m2xx_cpp_video_4k.so|2561fb0cdd6c191efec4431ba165ffbe662e6575
+vendor/lib/libchromatix_s5k3m2xx_cpp_video.so|a2dbf65173ae4d424e1f6b635fa79163840aca58
+vendor/lib/libchromatix_s5k3m2xx_default_preview_ad5816g.so|adc1447966567235d07a397cb3fb4fba6eb9e49b
+vendor/lib/libchromatix_s5k3m2xx_default_video_ad5816g.so|23b6db4645d25b7eb3fee510fe8f459f16ea4e81
+vendor/lib/libchromatix_s5k3m2xx_default_video.so|7587ed5a32b29170e77e3f9d31d15123d258c7f9
+vendor/lib/libchromatix_s5k3m2xx_hfr_120_ad5816g.so|8e055064504c0e0d63f37055e01115aa5674a94d
+vendor/lib/libchromatix_s5k3m2xx_hfr_120.so|80f37a267bd6d0a8d7bdc8e0925894581a9558da
+vendor/lib/libchromatix_s5k3m2xx_hfr_60_ad5816g.so|cb45b79a3bd54f47ffdf734da5dd156c9caa03b5
+vendor/lib/libchromatix_s5k3m2xx_hfr_60.so|7cb55368e35586d8185991c6c12f8e14a29e2790
+vendor/lib/libchromatix_s5k3m2xx_hfr_90_ad5816g.so|26be75f4e42de37c9c5cedcb88e6a9a62850ba3b
+vendor/lib/libchromatix_s5k3m2xx_hfr_90.so|984ffaa9e6239a02b9be82793012df99fcc0052a
+vendor/lib/libchromatix_s5k3m2xx_liveshot.so|2d1b2a89c1ff8fb26765e9bccaa3221cc9215d83
+vendor/lib/libchromatix_s5k3m2xx_postproc.so|98da81cbcca2ea57399b698c9ccceb22ac34a82d
+vendor/lib/libchromatix_s5k3m2xx_preview.so|52a074a53760de74a3790edd4a2e46574150652d
+vendor/lib/libchromatix_s5k3m2xx_snapshot.so|3084db368c3181448d8a05248af27fc2aef8e82c
+vendor/lib/libchromatix_s5k3m2xx_video_4k.so|1a3df1aa96f7d37a1bcb3d6d65c964a91ca0a753
+vendor/lib/libchromatix_s5k3m2xx_zsl_preview_ad5816g.so|33a0c5f4aa1e4721393c3fb988cd734ffb97a7cc
+vendor/lib/libchromatix_s5k3m2xx_zsl_video_ad5816g.so|8a89fdb7ad3521ed10b0e01fd4275cca1b5f7486
+vendor/lib/libchromatix_s5k3p3_a3_default_preview_bu64291_q3p3maa.so|13a927fc24b206fea27c76c186e7e9ad1de13386
+vendor/lib/libchromatix_s5k3p3_a3_default_video_bu64291_q3p3maa.so|cc873fc856f8e0ec12c935e5745ba3ef1ad6984c
+vendor/lib/libchromatix_s5k3p3_a3_hfr_120_bu64291_q3p3maa.so|91e0ff362d45924c140007985835ce55c9eb447c
+vendor/lib/libchromatix_s5k3p3_a3_hfr_60_bu64291_q3p3maa.so|54f018e03aa02506c8d2022bb681e8e54b62d45d
+vendor/lib/libchromatix_s5k3p3_a3_hfr_90_bu64291_q3p3maa.so|87ec1c063cc97240e7e7528118154f83c86cc2ab
+vendor/lib/libchromatix_s5k3p3_a3_zsl_preview_bu64291_q3p3maa.so|d286be50b1362a0328ec6106110312240f140b05
+vendor/lib/libchromatix_s5k3p3_a3_zsl_video_bu64291_q3p3maa.so|8eb9262388d7233d2e958022beaace320a640bea
+vendor/lib/libchromatix_s5k3p3_common.so|df4e146c969552f7711308cbe5d38435b3ceba61
+vendor/lib/libchromatix_s5k3p3_cpp_hfr_120.so|54fe27b04d460e109a55a3a2d890a478c950543f
+vendor/lib/libchromatix_s5k3p3_cpp_hfr_60.so|dabb06bf7bac3367987769c94914aa72cb6dd6bb
+vendor/lib/libchromatix_s5k3p3_cpp_hfr_90.so|373e58c01370f8ad9ad99a5835713205f3859f05
+vendor/lib/libchromatix_s5k3p3_cpp_liveshot.so|b64515ff25a6574cc4254ef8f1a3f79dd86ad7c4
+vendor/lib/libchromatix_s5k3p3_cpp_preview.so|a8a298183dddd747566683c519465be4b143b1f3
+vendor/lib/libchromatix_s5k3p3_cpp_snapshot.so|8c92d61f657dedd54315e9a404740ef960f10dc5
+vendor/lib/libchromatix_s5k3p3_cpp_video.so|d74b4312d6c8363c0c1c07e1c13477bdf165aeaa
+vendor/lib/libchromatix_s5k3p3_default_video.so|a5abd1f8b0e16ead71452fa5f6234493ecbcbb6c
+vendor/lib/libchromatix_s5k3p3_hfr_120.so|42fbeb2b03586b5e1207f212837c1fda9b4d835f
+vendor/lib/libchromatix_s5k3p3_hfr_60.so|e628723f4cca72c15291b506261baa723d7bf2ad
+vendor/lib/libchromatix_s5k3p3_hfr_90.so|88d014b79ea3b8274c04ea755e80452ea444c892
+vendor/lib/libchromatix_s5k3p3_liveshot.so|95f05c2ed9dd7cb78f7908f72f3db3b396da9a20
+vendor/lib/libchromatix_s5k3p3_postproc.so|0bfdd56e2a3f9943195c7f2a840acfff2ff9ebcb
+vendor/lib/libchromatix_s5k3p3_preview.so|c1660fc5843bdcde52e949f7eb5557ca98124612
+vendor/lib/libchromatix_s5k3p3_snapshot.so|849635f0c9615c0506f85b666574ef9235ec7314
+vendor/lib/libflash_pmic.so|f1dd4561ab1b402d3c1a80a472d84bc4d8d3794c
+vendor/lib/libmmcamera2_vpe_module.so|e1e4ee516fdcb355f039570e8152d755b36bcd26
+vendor/lib/libmmcamera2_wnr_module.so|d55174223faee6e2a9d48ea1f70102adfb2989a8
+vendor/lib/libmmcamera_dw9761b_eeprom.so|47eea122ea4622fc4fab455cbaa74d8d73e6647f
+vendor/lib/libmmcamera_imx214.so|150af0cd921e1fe78a12f12c62295124d8d870f3
+vendor/lib/libmmcamera_imx230.so|8de56302ba6d46a2c59e6cb32f6f531c26e5ee18
+vendor/lib/libmmcamera_imx258_cmb200_eeprom.so|6d5bb687d4f8772f354643f432f0a2d0e55df60f
+vendor/lib/libmmcamera_imx258_gt24c16_eeprom.so|12e4edd5858e15e53fc59a52ec82023f49bb95db
+vendor/lib/libmmcamera_imx258_ofilm_gt24c64_eeprom.so|425295a24cee56751a4a1f77edc0f850b70b041f
+vendor/lib/libmmcamera_imx258_ofilm.so|d764b934127485f17dd95d36142117efd87b6eaf
+vendor/lib/libmmcamera_imx258.so|36109e7781e9fdf332cda52209a38b1aa90f0fc4
+vendor/lib/libmmcamera_imx298.so|4570ee534bcd71bdb00a934a43aeab9331a4a604
+vendor/lib/libmmcamera_le2464c_master_eeprom.so|1be43e2f781efdfbb1e598a0755d4104f20bac3a
+vendor/lib/libmmcamera_ofilm_ogl8f03_eeprom.so|78dbdbbb207f6f0f4c6bcdc558ce172e5a1f7294
+vendor/lib/libmmcamera_onsemi_cat24c16_eeprom.so|a24c5941e7c1d984cb0a97c9fb7dc7dd417511f9
+vendor/lib/libmmcamera_onsemi_cat24c32_eeprom.so|35d6a24f15313a8a99c9e013a7c1ce5af1297c84
+vendor/lib/libmmcamera_ov13850_q13v06k.so|c290bdec19f6a8790fe1a4ad106e0200547825eb
+vendor/lib/libmmcamera_ov13850.so|297c2f520641bed19097ecb2c25ed6130179778d
+vendor/lib/libmmcamera_ov2685_scv3b4035.so|5626ee768130c4a250eb4ceae3b3791f907224f9
+vendor/lib/libmmcamera_ov2685.so|72e809c46ed8bb8f54ef6bbafca7a3e176e7352e
+vendor/lib/libmmcamera_ov4688_eeprom.so|d6bfe42a477c4ec4fe96b8652798d68e65aad7f4
+vendor/lib/libmmcamera_ov4688.so|fd79a98c397a4b07854ddaca1f5240736ae9c0a4
+vendor/lib/libmmcamera_ov5645.so|57fd2f5398d1dd89c33ed1a1bfb3299e91e40a67
+vendor/lib/libmmcamera_ov5670.so|a250b588aadb15fa3bdf283218d5b3bda847710c
+vendor/lib/libmmcamera_ov8856_cmb199.so|242863ad5b05578dd99178832112267aa812e330
+vendor/lib/libmmcamera_ov8856.so|ba3fd23b188f6eab3826081120bf813038649444
+vendor/lib/libmmcamera_ov8858.so|635878ef11395ec9c4cc20a617c9680fd1dc23a6
+vendor/lib/libmmcamera_ov8865.so|b0a97e1467bbaeeb7c460130122e502257fd7c91
+vendor/lib/libmmcamera_s5k3l8.so|377e3cc784bcc2490f904ae4486f94a2ee50d764
+vendor/lib/libmmcamera_s5k3m2xm.so|873746b07708841e563e18302b3f5812b0e2c030
+vendor/lib/libmmcamera_s5k3m2xx.so|e49baa165e7636b58ce550ed173c7e49ab9df58d
+vendor/lib/libmmcamera_s5k3p3.so|3da69567d20b1825c26ddd6ae7b8ca030d61c20e
+vendor/lib/libmmcamera_sonyimx135_eeprom.so|dd3e9f68090f38c0d5cfc4e397354066bb1a930c
+vendor/lib/libmmcamera_sony_imx214_eeprom.so|eeaa99784acc16dc00cdfda7435c9fcd446d1804
+vendor/lib/libmmcamera_sony_imx298_eeprom.so|5c2804e06b0f7879620f675b4a5f942ef62ca543
+vendor/lib/libmmcamera_sunny_8865_eeprom.so|e8ab27fdf0142aa93c2a10bb7f5b31353f11ad0a
+vendor/lib/libmmcamera_sunny_a16s05e_eeprom.so|2232166c7efb80e6f247203ee271930991896859
+vendor/lib/libmmcamera_sunny_d8v03c_eeprom.so|8258696662a09fe4b9aebc3ec702f2f7dc871b81
+vendor/lib/libmmcamera_sunny_q13v06k_eeprom.so|98e7a50bbd96dcc70e7841add92a197e782ae303
+vendor/lib/libmmcamera_sunny_q5v41b_eeprom.so|f78adc777b736f2dfeb084d4f7074691ca1f889d
+vendor/lib/libmmcamera_truly_cmb199_eeprom.so|2ebb5b41fe3163dcc6efa8ca2add9b111efb9e8a
+vendor/lib/libmmcamera_vpu_module.so|df4ca99843bb8e6b60aab691e09a152b227a1b9f
+vendor/lib/libois_lc898122.so|637c2f6c3ea9ab17e83b3f2b45fbccf9563dfd88
+
+# Arcsoft camera libs required by the stock blob-era camera stack
+# (extracted from stock system.img /vendor/lib; dlopen'ed by the daemon
+# side. beautyshot is large (~19MB) but load-required).
+vendor/lib/libarcsoft_beautyshot.so|9ef62b9068d749b88d3d25cd1fe901c9e15c787b
+vendor/lib/libarcsoft_night_shot.so|5c9d273473d32bc5f450d50015245649b483ac43
+vendor/lib/libarcsoft_nighthawk.so|76e13c113ab432a667a7e10603e99884dcd42184

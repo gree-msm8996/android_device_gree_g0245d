@@ -1,0 +1,2 @@
+# First-stage init reads this from the boot ramdisk, before /system exists.
+/dev/block/by-name/system  /system  ext4  ro,barrier=1  wait,first_stage_mount
